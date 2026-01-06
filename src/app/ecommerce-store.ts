@@ -4,12 +4,19 @@ import { patchState, signalMethod, signalStore, withComputed, withMethods, withS
 import { produce } from "immer"
 import { Toaster } from "./services/toaster";
 import { CartItem } from "./models/cart";
+import { MatDialog } from "@angular/material/dialog";
+import { SignInDialog } from "./components/sign-in-dialog/sign-in-dialog";
+import { SignInParams, SignUpParams, User } from "./models/user";
+import { Router } from "@angular/router";
+import { Order } from "./models/order";
 
 export type EcommerceState = {
     products: Product[];
     category: string;
     wishlistItems: Product[];
     cartItems: CartItem[];
+    user: User | undefined;
+    loading: boolean
 };
 
 export const EcommerceStore = signalStore(
@@ -41,7 +48,9 @@ export const EcommerceStore = signalStore(
         ],
         category: 'all',
         wishlistItems: [],
-        cartItems: []
+        cartItems: [],
+        user: undefined,
+        loading: false
     } as EcommerceState),
     withComputed(({ category, products, wishlistItems, cartItems }) => ({
         filteredProducts: computed(() => {
@@ -49,10 +58,10 @@ export const EcommerceStore = signalStore(
             return products().filter(p => p.category === category().toLowerCase());
         }),
         wishlistCount: computed(() => wishlistItems().length),
-        cartCount: computed(() => cartItems().reduce((acc, item)=> acc + item.quantity, 0))
+        cartCount: computed(() => cartItems().reduce((acc, item) => acc + item.quantity, 0))
 
     })),
-    withMethods((store, toaster = inject(Toaster)) => ({
+    withMethods((store, toaster = inject(Toaster), matDialog = inject(MatDialog), router = inject(Router)) => ({
         setCategory: signalMethod<string>(
             (category: string) => {
                 patchState(store, { category })
@@ -83,39 +92,105 @@ export const EcommerceStore = signalStore(
                 }
                 draft.push({ product, quantity })
             });
-            patchState(store, {cartItems:updatedCartItem})
-            toaster.success(existingItemIndex !== -1?'Product added again':'Product added to the cart')
+            patchState(store, { cartItems: updatedCartItem })
+            toaster.success(existingItemIndex !== -1 ? 'Product added again' : 'Product added to the cart')
         },
-        setItemQuantity(params: {productId:string, quantity:number}) {
-            const index = store.cartItems().findIndex(c=>c.product.id === params.productId);
-            const updated = produce(store.cartItems(), (draft)=>{
+        setItemQuantity(params: { productId: string, quantity: number }) {
+            const index = store.cartItems().findIndex(c => c.product.id === params.productId);
+            const updated = produce(store.cartItems(), (draft) => {
                 draft[index].quantity = params.quantity
             });
-            patchState(store, {cartItems:updated});
+            patchState(store, { cartItems: updated });
         },
-        addAllWishListToCart:()=>{
-            const updatedCartItems = produce(store.cartItems(), (draft)=>{
-                store.wishlistItems().forEach(p=>{
-                    if(!draft.find(c=> c.product.id === p.id)) {
-                        draft.push({product:p, quantity:1});
+        addAllWishListToCart: () => {
+            const updatedCartItems = produce(store.cartItems(), (draft) => {
+                store.wishlistItems().forEach(p => {
+                    if (!draft.find(c => c.product.id === p.id)) {
+                        draft.push({ product: p, quantity: 1 });
                     }
                 })
             })
-            patchState(store, {cartItems: updatedCartItems, wishlistItems: []})
+            patchState(store, { cartItems: updatedCartItems, wishlistItems: [] })
         },
-        moveToWishlist:(product:Product) => {
-            const updatedCartItems = store.cartItems().filter((p)=> p.product.id !== product.id);
-            const updatedWishListItems=produce(store.wishlistItems(), (draft)=>{
-                if(!draft.find((p)=>p.id === product.id)) {
+        moveToWishlist: (product: Product) => {
+            const updatedCartItems = store.cartItems().filter((p) => p.product.id !== product.id);
+            const updatedWishListItems = produce(store.wishlistItems(), (draft) => {
+                if (!draft.find((p) => p.id === product.id)) {
                     draft.push(product);
                 }
             })
-            patchState(store, {cartItems:updatedCartItems, wishlistItems:updatedWishListItems})
+            patchState(store, { cartItems: updatedCartItems, wishlistItems: updatedWishListItems })
         },
-        removeFromCart: (product:Product)=>{
+        removeFromCart: (product: Product) => {
             patchState(store, {
-                cartItems:store.cartItems().filter((c)=> c.product.id !== product.id)
+                cartItems: store.cartItems().filter((c) => c.product.id !== product.id)
             })
+        },
+        proceedToCheckout: () => {
+            if (!store.user()) {
+                matDialog.open(SignInDialog, {
+                    disableClose: true,
+                    data: {
+                        checkout: true
+                    }
+                });
+                return;
+            }
+            router.navigate(['/checkout']);
+        },
+        signIn: ({ email, password, checkout, dialogId }: SignInParams) => {
+            patchState(store, {
+                user: {
+                    id: '1',
+                    email,
+                    name: 'John Doe',
+                    imageUrl: 'https://randomuser.me/api/portraits/men/1.jpg'
+                },
+            })
+            const dialog = matDialog.getDialogById(dialogId)?.close();
+            if (checkout) {
+                router.navigate(['/checkout'])
+            }
+        },
+        signUp: ({ email, password, name, checkout, dialogId }: SignUpParams) => {
+            patchState(store, {
+                user: {
+                    id: '1',
+                    email,
+                    name: 'John Doe',
+                    imageUrl: 'https://randomuser.me/api/portraits/men/1.jpg'
+                },
+            })
+            const dialog = matDialog.getDialogById(dialogId)?.close();
+            if (checkout) {
+                router.navigate(['/checkout'])
+            }
+
+        },
+        signOut: () => {
+            patchState(store, { user: undefined })
+        },
+        placeOrder: async () => {
+            patchState(store, { loading: true });
+            const user = store.user();
+            if(!user) {
+                toaster.error("Please login before placing order");
+                patchState(store, {loading:false})
+                return;
+            }
+            const order: Order = {
+                id: crypto.randomUUID(),
+                userId: user.id || '',
+                total: Math.round(
+                            store.cartItems()
+                            .reduce((acc, item)=>acc + item.quantity* item.product.price, 0)),
+                items: store.cartItems(),
+                paymentStatus: 'success'
+            }
+
+            await new Promise((resolve)=> setTimeout(resolve, 5000));
+            patchState(store, { loading: false, cartItems: []});
+            router.navigate(['order-success']);
         }
     }))
 );
