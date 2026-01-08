@@ -7,14 +7,18 @@ import { MatButton } from "@angular/material/button";
 import { EcommerceStore } from '../../../ecommerce-store';
 import { MatIcon } from '@angular/material/icon';
 import { ToggleWishlistButton } from "../../../components/toggle-wishlist-button/toggle-wishlist-button";
+import { StarRating } from "../../../components/star-rating/star-rating";
 
 @Component({
   selector: 'app-product-info',
-  imports: [TitleCasePipe, StockStatus, QtySelector, MatButton, MatIcon, ToggleWishlistButton],
+  imports: [TitleCasePipe, StockStatus, QtySelector, MatButton, MatIcon, ToggleWishlistButton, StarRating],
   template: `
     <div class="text-xs rounded-xl bg-gray-100 px-2 py-1 w-fit mb-2">
       {{product().category | titlecase}}
     </div>
+    <app-star-rating class="mb-3" [rating]="product().rating">
+      {{product().rating}} ( {{product().reviewCount}} reviews)
+    </app-star-rating>
     <h1 class="text-2xl font-extrabold mb-3">{{product().name}}</h1>
     <p class="text-3xl font-extrabold mb-4">\${{product().price}}</p>
     <app-stock-status class="mb-4" [inStock]="product().inStock"/>

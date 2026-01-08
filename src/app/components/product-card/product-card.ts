@@ -5,10 +5,11 @@ import { MatIcon } from "@angular/material/icon";
 import { CommonModule } from '@angular/common';
 import { EcommerceStore } from '../../ecommerce-store';
 import { RouterLink } from "@angular/router";
+import { StarRating } from "../star-rating/star-rating";
 
 @Component({
   selector: 'app-product-card',
-  imports: [MatAnchor, MatButton, MatIcon, RouterLink],
+  imports: [MatAnchor, MatButton, MatIcon, RouterLink, StarRating],
   template: `
     <div class="relative bg-white cursor-pointer rounded-x1 shadow-lg overflow-hidden flex flex-col h-full transition-all duration-200 ease-out hover:translate-y-1 hover:shadow-xl">
       <img [src]="product().imageUrl" [alt]="product().name" 
@@ -24,7 +25,9 @@ import { RouterLink } from "@angular/router";
           {{product().description}}
         </p>
   
-        <!-- Add rating component here-->
+        <app-star-rating class="mb-3" [rating]="product().rating">
+          ( {{product().reviewCount}} )
+        </app-star-rating>
   
         <div class="text-sm font-medium mb-4">
           {{product().inStock?"In Stock":"Out of Stock"}}
